@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from enum import auto
 from enum import Enum
 from queue import Empty
-from queue import Queue
+from queue import SimpleQueue
 import sys
 from typing import Any
 import warnings
@@ -53,7 +53,7 @@ class DSession:
         self.shuttingdown = False
         self.countfailures = 0
         self.maxfail: int = config.getvalue("maxfail")
-        self.queue: Queue[tuple[str, dict[str, Any]]] = Queue()
+        self.queue: SimpleQueue[tuple[str, dict[str, Any]]] = SimpleQueue()
         self._session: pytest.Session | None = None
         self._failed_collection_errors: dict[object, bool] = {}
         self._active_nodes: set[WorkerController] = set()

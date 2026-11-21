@@ -88,3 +88,34 @@ in another process. The problem is that test items are not easily
 functions, fixture managers, config objects, etc. Even if one manages to
 serialize it, it seems it would be very hard to get it right and easy to
 break by any small change in pytest.
+
+Measuring distribution overhead
+-------------------------------
+
+``benchmarks/xdist_overhead.py`` generates an independent suite of short tests;
+the repository's own tests are correctness checks, not benchmark workloads.
+Pass an unchanged source snapshot as the baseline and the working tree as the
+candidate::
+
+    python benchmarks/xdist_overhead.py \
+        --baseline /tmp/xdist-baseline --candidate . \
+        --pytest-majors 8 9 --workers 4 --cases 20000 \
+        --warmups 1 --runs 7 --check-suite
+
+The runner creates an isolated environment for each pytest major and uses the
+same interpreter and dependencies for both source trees. Editable builds
+generate the ignored version file in each tree. Installation is not timed.
+Baseline and candidate runs alternate order; each measurement includes startup,
+collection, execution, reporting and shutdown. JSON output includes every sample,
+the medians and the fractional reduction in elapsed time. Exit status zero
+requires a reduction of at least 25% on every requested pytest major and, with
+``--check-suite``, passing repository tests in both environments.
+
+Worker events are encoded with Python's ``marshal`` format 4 inside execnet
+messages to avoid Python-level traversal of every field in the transport.
+The controller decodes the original event before dispatch, so report dictionaries
+reach ``pytest_report_from_serializable`` unchanged. Values unsupported by
+``marshal``, such as execnet channels added by plugins, use execnet's original
+serialization. Events are still sent individually: hook order and crash reporting
+are not changed by buffering. The controller uses an unbounded ``SimpleQueue``
+because event processing does not need queue task tracking.

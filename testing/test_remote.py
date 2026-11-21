@@ -74,6 +74,8 @@ class WorkerSetup:
                 data = self.events.get(timeout=WAIT_TIMEOUT)
             else:
                 data = self.slp.channel.receive(timeout=WAIT_TIMEOUT)
+                if isinstance(data, bytes):
+                    data = marshal.loads(data)
             ev = EventCall(data)
             if name is None or ev.name == name:
                 return ev
@@ -525,3 +527,55 @@ def test_remote_sys_path(pytester: pytest.Pytester) -> None:
     )
     result = pytester.runpytest("-n1")
     assert result.ret == 0
+
+
+@pytest.mark.parametrize("with_channel", [False, True])
+def test_report_serialization_preserves_plugin_data(
+    pytester: pytest.Pytester, with_channel: bool
+) -> None:
+    pytester.makeconftest(
+        """
+        import pytest
+        import execnet
+
+        payload = {
+            "binary": b"\\x00\\xff",
+            "tuple": (1, "value", None),
+            "sets": [{1, 2}, frozenset({3})],
+            "complex": 1 + 2j,
+        }
+        seen = []
+        def pytest_configure_node(node):
+            if WITH_CHANNEL:
+                node.workerinput["plugin_channel"] = node.gateway.newchannel()
+
+
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_report_to_serializable(config, report):
+            outcome = yield
+            outcome.get_result()["plugin_data"] = payload
+            if WITH_CHANNEL:
+                outcome.get_result()["plugin_channel"] = config.workerinput["plugin_channel"]
+
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_report_from_serializable(config, data):
+            assert data["plugin_data"] == payload
+            assert isinstance(data["plugin_data"]["tuple"], tuple)
+            assert isinstance(data["plugin_data"]["sets"][1], frozenset)
+            if WITH_CHANNEL:
+                assert isinstance(data["plugin_channel"], execnet.Channel)
+            yield
+
+        def pytest_runtest_logreport(report):
+            if hasattr(report, "node"):
+                assert report.plugin_data == payload
+                seen.append(report.when)
+
+        def pytest_sessionfinish(session):
+            if not hasattr(session.config, "workerinput"):
+                assert seen == ["setup", "call", "teardown"]
+        """.replace("WITH_CHANNEL", str(with_channel))
+    )
+    pytester.makepyfile("def test_short(): pass")
+    result = pytester.runpytest_subprocess("-n", "1")
+    result.assert_outcomes(passed=1)

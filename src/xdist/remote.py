@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from collections.abc import Sequence
 import contextlib
 import enum
+import marshal
 import os
 import sys
 import time
@@ -124,7 +125,16 @@ class WorkerInteractor:
 
     def sendevent(self, name: str, **kwargs: object) -> None:
         self.log("sending", name, kwargs)
-        self.channel.send((name, kwargs))
+        event = (name, kwargs)
+        # Format 4 is understood by all supported Python versions. Encoding the
+        # whole event avoids execnet's Python-level traversal of each field.
+        try:
+            encoded = marshal.dumps(event, 4)
+        except ValueError:
+            # Plugins can include execnet channels, which marshal cannot encode.
+            self.channel.send(event)
+        else:
+            self.channel.send(encoded)
 
     @pytest.hookimpl
     def pytest_internalerror(self, excrepr: object) -> None:

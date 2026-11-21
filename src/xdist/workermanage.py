@@ -4,6 +4,7 @@ from collections.abc import Callable
 from collections.abc import Sequence
 import enum
 import fnmatch
+import marshal
 import os
 from pathlib import Path
 import re
@@ -391,15 +392,17 @@ class WorkerController:
 
     def sendcommand(self, name: str, **kwargs: object) -> None:
         """Send a named parametrized command to the other side."""
-        self.log(f"sending command {name}(**{kwargs})")
+        if self.log.enabled:
+            self.log(f"sending command {name}(**{kwargs})")
         self.channel.send((name, kwargs))
 
     def notify_inproc(self, eventname: str, **kwargs: object) -> None:
-        self.log(f"queuing {eventname}(**{kwargs})")
+        if self.log.enabled:
+            self.log(f"queuing {eventname}(**{kwargs})")
         self.putevent((eventname, kwargs))
 
     def process_from_remote(
-        self, eventcall: tuple[str, dict[str, Any]] | Literal[Marker.END]
+        self, eventcall: bytes | tuple[str, dict[str, Any]] | Literal[Marker.END]
     ) -> None:
         """This gets called for each object we receive from
         the other side and if the channel closes.
@@ -409,6 +412,8 @@ class WorkerController:
         avoid raising exceptions or doing heavy work.
         """
         try:
+            if isinstance(eventcall, bytes):
+                eventcall = marshal.loads(eventcall)
             if eventcall is Marker.END:
                 err: object | None = self.channel._getremoteerror()  # type: ignore[no-untyped-call]
                 if not self._down:
@@ -419,7 +424,8 @@ class WorkerController:
                 return
             eventname, kwargs = eventcall
             if eventname in ("collectionstart",):
-                self.log(f"ignoring {eventname}({kwargs})")
+                if self.log.enabled:
+                    self.log(f"ignoring {eventname}({kwargs})")
             elif eventname in {"workerready", "internal_error"}:
                 self.notify_inproc(eventname, node=self, **kwargs)
             elif eventname == "workerfinished":
