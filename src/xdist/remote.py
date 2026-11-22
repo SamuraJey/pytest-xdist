@@ -54,6 +54,11 @@ class Producer:
         if self.enabled:
             print(f"[{self.name}]", *a, **k, file=sys.stderr)
 
+    def format(self, template: str, /, *args: object) -> None:
+        """Log a literal str.format template with its values supplied separately."""
+        if self.enabled:
+            self(template.format(*args))
+
     def __getattr__(self, name: str) -> Producer:
         return type(self)(name, enabled=self.enabled)
 

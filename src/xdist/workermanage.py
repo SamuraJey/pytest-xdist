@@ -114,7 +114,9 @@ class NodeManager:
         # Keep the node alive.
         gw.node = node  # type: ignore[attr-defined]
         node.setup()
-        self.trace("started node %r" % node)
+        # Keep the single-string payload expected by trace processors.
+        message = f"started node {node!r}"
+        self.trace(message)
         return node
 
     def teardown_nodes(self) -> None:
@@ -391,11 +393,11 @@ class WorkerController:
 
     def sendcommand(self, name: str, **kwargs: object) -> None:
         """Send a named parametrized command to the other side."""
-        self.log(f"sending command {name}(**{kwargs})")
+        self.log.format("sending command {}(**{})", name, kwargs)
         self.channel.send((name, kwargs))
 
     def notify_inproc(self, eventname: str, **kwargs: object) -> None:
-        self.log(f"queuing {eventname}(**{kwargs})")
+        self.log.format("queuing {}(**{})", eventname, kwargs)
         self.putevent((eventname, kwargs))
 
     def process_from_remote(
@@ -419,7 +421,7 @@ class WorkerController:
                 return
             eventname, kwargs = eventcall
             if eventname in ("collectionstart",):
-                self.log(f"ignoring {eventname}({kwargs})")
+                self.log.format("ignoring {}({})", eventname, kwargs)
             elif eventname in {"workerready", "internal_error"}:
                 self.notify_inproc(eventname, node=self, **kwargs)
             elif eventname == "workerfinished":

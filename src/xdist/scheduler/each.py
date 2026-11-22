@@ -97,13 +97,14 @@ class EachScheduling:
                 if deadnode.gateway.spec == node.gateway.spec:
                     dead_collection = self.node2collection[deadnode]
                     if collection != dead_collection:
-                        msg = report_collection_diff(
-                            dead_collection,
-                            collection,
-                            deadnode.gateway.id,
-                            node.gateway.id,
-                        )
-                        self.log(msg)
+                        if self.log.enabled:
+                            msg = report_collection_diff(
+                                dead_collection,
+                                collection,
+                                deadnode.gateway.id,
+                                node.gateway.id,
+                            )
+                            self.log(msg)
                         return
                     pending = self._removed2pending.pop(deadnode)
                     self.node2pending[node] = pending

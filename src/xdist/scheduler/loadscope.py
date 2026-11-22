@@ -230,12 +230,16 @@ class LoadScopeScheduling:
 
             # Check that the new collection matches the official collection
             if collection != self.collection:
-                other_node = next(iter(self.registered_collections.keys()))
+                if self.log.enabled:
+                    other_node = next(iter(self.registered_collections.keys()))
 
-                msg = report_collection_diff(
-                    self.collection, collection, other_node.gateway.id, node.gateway.id
-                )
-                self.log(msg)
+                    msg = report_collection_diff(
+                        self.collection,
+                        collection,
+                        other_node.gateway.id,
+                        node.gateway.id,
+                    )
+                    self.log(msg)
                 return
 
         self.registered_collections[node] = list(collection)
@@ -402,12 +406,17 @@ class LoadScopeScheduling:
         extra_nodes = len(self.nodes) - len(self.workqueue)
 
         if extra_nodes > 0:
-            self.log(f"Shutting down {extra_nodes} nodes")
+            log_enabled = not isinstance(self.log, Producer) or self.log.enabled
+            if log_enabled:
+                message = f"Shutting down {extra_nodes} nodes"
+                self.log(message)
 
             for _ in range(extra_nodes):
                 unused_node, _assigned = self.assigned_work.popitem()
 
-                self.log(f"Shutting down unused node {unused_node}")
+                if log_enabled:
+                    message = f"Shutting down unused node {unused_node}"
+                    self.log(message)
                 unused_node.shutdown()
 
         # Assign initial workload

@@ -151,11 +151,15 @@ class WorkStealingScheduling:
             # been called by now
             assert self.collection
             if collection != self.collection:
-                other_node = next(iter(self.node2collection.keys()))
-                msg = report_collection_diff(
-                    self.collection, collection, other_node.gateway.id, node.gateway.id
-                )
-                self.log(msg)
+                if self.log.enabled:
+                    other_node = next(iter(self.node2collection.keys()))
+                    msg = report_collection_diff(
+                        self.collection,
+                        collection,
+                        other_node.gateway.id,
+                        node.gateway.id,
+                    )
+                    self.log(msg)
                 return
         self.node2collection[node] = list(collection)
 

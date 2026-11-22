@@ -60,6 +60,24 @@ def workercontroller(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestNodeManagerPopen:
+    def test_startup_trace_processor_payload(
+        self, config: pytest.Config, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(workermanage.WorkerController, "setup", lambda self: None)
+        manager = NodeManager(config, ["popen//id=gw0"])
+        records: list[tuple[object, ...]] = []
+
+        def record(tags: tuple[str, ...], args: tuple[object, ...]) -> None:
+            records.append(args)
+
+        manager.trace.root.setprocessor(manager.trace.tags, record)
+        try:
+            manager.setup_node(manager.specs[0], lambda event: None)
+        finally:
+            manager.teardown_nodes()
+
+        assert records == [("started node <WorkerController gw0>",)]
+
     def test_popen_no_default_chdir(self, config: pytest.Config) -> None:
         gm = NodeManager(config, ["popen"])
         assert gm.specs[0].chdir is None

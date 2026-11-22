@@ -16,9 +16,11 @@ from xdist.dsession import get_default_max_worker_restart
 from xdist.dsession import get_workers_status_line
 from xdist.dsession import TerminalDistReporter
 from xdist.dsession import WorkerStatus
+from xdist.remote import Producer
 from xdist.report import report_collection_diff
 from xdist.scheduler import EachScheduling
 from xdist.scheduler import LoadScheduling
+from xdist.scheduler import LoadScopeScheduling
 from xdist.scheduler import WorkStealingScheduling
 from xdist.workermanage import WorkerController
 
@@ -60,6 +62,39 @@ class MockNode(BaseOfMockNode):
     @property
     def shutting_down(self) -> bool:
         return self._shutdown
+
+
+def test_loadscope_logs_shutdown_through_legacy_producer(
+    pytester: pytest.Pytester,
+) -> None:
+    messages: list[tuple[tuple[str, ...], tuple[object, ...]]] = []
+
+    class LegacyProducer:
+        # py.log.Producer extends the channel name for every attribute access.
+        def __init__(self, tags: tuple[str, ...] = ()) -> None:
+            self.tags = tags
+
+        def __getattr__(self, name: str) -> LegacyProducer:
+            return type(self)((*self.tags, name))
+
+        def __call__(self, *args: object) -> None:
+            messages.append((self.tags, args))
+
+    config = pytester.parseconfig("--tx=2*popen")
+    sched = LoadScopeScheduling(config, log=cast(Producer, LegacyProducer()))
+    kept, unused = MockNode(), MockNode()
+    for node in (kept, unused):
+        sched.add_node(node)
+        sched.add_node_collection(node, ["a.py::test_one"])
+
+    sched.schedule()
+
+    assert kept.sent == [0]
+    assert unused.shutting_down
+    assert messages == [
+        (("loadscopesched",), ("Shutting down 1 nodes",)),
+        (("loadscopesched",), (f"Shutting down unused node {unused}",)),
+    ]
 
 
 class TestEachScheduling:
